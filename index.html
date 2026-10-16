@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alfred</title>
+
+<!-- FONTS: swap these two names (and the font names in the CSS below) to change the typefaces -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alex+Brush&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  /* ==========================================================
+     1. COLORS AND SIZES — change these first, everything follows
+     ========================================================== */
+  :root{
+    --bg: #050505;          /* page background */
+    --ink: #F2F2F0;         /* main text */
+    --muted: #7A7A7A;       /* secondary text */
+    --faint: #4A4A4A;       /* tertiary text, borders on hover */
+    --line: #1C1C1C;        /* thin dividers */
+    --panel: #0B0B0B;       /* chat box and input background */
+
+    --name-font: 'Alex Brush', cursive;          /* Alfred's name */
+    --body-font: 'JetBrains Mono', monospace;    /* everything else */
+    --name-size: clamp(64px, 12vw, 120px);       /* size of the name */
+    --page-width: 720px;                          /* how wide the content column is */
+  }
+
+  *{ box-sizing: border-box; }
+
+  html, body{
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--body-font);
+  }
+
+  .page{
+    max-width: var(--page-width);
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+
+  /* ==========================================================
+     2. HEADER — the name, tagline, and online/offline status
+     ========================================================== */
+  .header{
+    text-align: center;
+    padding: 64px 0 40px;
+  }
+
+  .name{
+    font-family: var(--name-font);
+    font-size: var(--name-size);
+    line-height: 1;
+    margin: 0;
+    font-weight: 400;
+  }
+
+  .tagline{
+    margin: 18px 0 0;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .status{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 22px;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .dot{ width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+  .dot.online{ background: var(--ink); animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{ opacity: 1; } 50%{ opacity: .25; } }
+
+  .last-seen{ display: block; margin-top: 6px; font-size: 10px; color: var(--faint); text-transform: none; letter-spacing: .06em; }
+
+  /* ==========================================================
+     3. CHAT BOX — where you talk to Alfred
+     ========================================================== */
+  .chat{
+    border: 1px solid var(--line);
+    background: var(--panel);
+    margin-bottom: 40px;
+  }
+
+  .chat-log{
+    height: 340px;              /* chat window height */
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .chat-empty{ color: var(--faint); font-size: 13px; margin: auto; text-align: center; }
+
+  .msg{ max-width: 85%; font-size: 13px; line-height: 1.6; }
+  .msg .who{ font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .msg.user{ align-self: flex-end; text-align: right; color: var(--muted); }   /* your messages: right side */
+  .msg.alfred{ align-self: flex-start; color: var(--ink); }                    /* Alfred's messages: left side */
+
+  .chat-form{
+    display: flex;
+    border-top: 1px solid var(--line);
+  }
+
+  .chat-form input{
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--ink);
+    font-family: var(--body-font);
+    font-size: 13px;
+    padding: 16px 20px;
+  }
+  .chat-form input::placeholder{ color: var(--faint); }
+
+  .chat-form button{
+    background: var(--ink);
+    color: var(--bg);
+    border: none;
+    font-family: var(--body-font);
+    font-size: 12px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 0 24px;
+    cursor: pointer;
+  }
+  .chat-form button:disabled{ background: var(--faint); cursor: default; }
+
+  /* ==========================================================
+     4. DASHBOARD SECTIONS — parameters, scan, ports, notes
+     ========================================================== */
+  section{ border-top: 1px solid var(--line); padding: 28px 0; }
+
+  section h2{
+    margin: 0 0 18px;
+    font-size: 11px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  .row{ display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .row span:last-child{ color: var(--ink); }
+
+  .two-col{ display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 18px; }
+  .two-col ul{ margin: 0; padding: 0; list-style: none; }
+  .two-col li{ font-size: 12px; padding: 4px 0; }
+  .allowed li::before{ content: "+ "; color: var(--muted); }
+  .forbidden li{ color: var(--faint); }
+  .forbidden li::before{ content: "x "; }
+
+  table{ width: 100%; border-collapse: collapse; font-size: 13px; }
+  th{ text-align: left; font-weight: 500; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+  td{ padding: 10px 0; border-bottom: 1px solid var(--line); }
+  td.dim{ color: var(--muted); }
+
+  .empty{ color: var(--muted); font-size: 13px; }
+
+  .note{ padding: 16px 0; border-bottom: 1px solid var(--line); }
+  .note:last-child{ border-bottom: none; }
+  .note-head{ display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+  .tag{ font-size: 10px; letter-spacing: .08em; padding: 2px 6px; border: 1px solid var(--line); color: var(--muted); }
+  .tag.high{ border-color: var(--ink); color: var(--ink); }
+  .tag.medium{ border-color: var(--muted); color: var(--muted); }
+  .note-port{ font-size: 12px; color: var(--muted); }
+  .note-time{ font-size: 10px; color: var(--faint); margin-left: auto; }
+  .note-text{ font-size: 13px; line-height: 1.5; margin-bottom: 4px; }
+  .note-action{ font-size: 12px; line-height: 1.5; color: var(--muted); }
+  .note-action::before{ content: "-> "; }
+
+  @media (max-width: 480px){ .two-col{ grid-template-columns: 1fr; } }
+</style>
+</head>
+
+<body>
+<div class="page">
+
+  <!-- ===== HEADER: edit the name and tagline text here ===== -->
+  <header class="header">
+    <h1 class="name">Alfred</h1>
+    <p class="tagline">Your personal autonomous vulnerability scanning agent</p>
+    <div class="status">
+      <span class="dot" id="dot"></span>
+      <span id="status-text">Connecting</span>
+    </div>
+    <span class="last-seen" id="last-seen"></span>
+  </header>
+
+  <!-- ===== CHAT BOX: move this block up or down to change where the chat sits ===== -->
+  <div class="chat">
+    <div class="chat-log" id="chat-log">
+      <p class="chat-empty" id="chat-empty">Ask Alfred about your latest scan.</p>
+    </div>
+    <form class="chat-form" id="chat-form">
+      <input type="text" id="chat-input" placeholder="Ask about current findings..." autocomplete="off">
+      <button type="submit" id="chat-button">Send</button>
+    </form>
+  </div>
+
+  <!-- ===== DASHBOARD SECTIONS: reorder, delete, or restyle any of these ===== -->
+  <section>
+    <h2>Parameters</h2>
+    <div class="row"><span>Target</span><span id="cap-target">—</span></div>
+    <div class="row"><span>Port range</span><span id="cap-ports">—</span></div>
+    <div class="row"><span>Scan interval</span><span id="cap-interval">—</span></div>
+    <div class="row"><span>Mode</span><span id="cap-mode">—</span></div>
+    <div class="two-col">
+      <ul class="allowed" id="cap-allowed"></ul>
+      <ul class="forbidden" id="cap-forbidden"></ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Last Scan</h2>
+    <div class="row"><span>Time</span><span id="meta-time">—</span></div>
+    <div class="row"><span>Open ports</span><span id="meta-count">—</span></div>
+  </section>
+
+  <section>
+    <h2>Open Ports</h2>
+    <table>
+      <thead><tr><th>Port</th><th>Service</th><th>State</th></tr></thead>
+      <tbody id="ports-body"></tbody>
+    </table>
+    <p class="empty" id="ports-empty" style="display:none;">No scan data yet.</p>
+  </section>
+
+  <section>
+    <h2>Notes</h2>
+    <div id="notes-list"></div>
+    <p class="empty" id="notes-empty" style="display:none;">No findings logged yet.</p>
+  </section>
+
+</div>
+
+<script>
+  /* ==========================================================
+     JAVASCRIPT — talks to Alfred's API. Only touch this if you
+     want to change behavior, not looks.
+     ========================================================== */
+  const API = "http://localhost:8000";
+
+  // Token is asked for once, then remembered in this browser.
+  let TOKEN = localStorage.getItem("alfred_token");
+  if (!TOKEN) {
+    TOKEN = prompt("Enter your ALFRED_API_TOKEN:") || "";
+    localStorage.setItem("alfred_token", TOKEN);
+  }
+  const headers = (extra = {}) => ({ "X-Alfred-Token": TOKEN, ...extra });
+
+  const $ = (id) => document.getElementById(id);
+
+  function fill(listEl, items) {
+    listEl.innerHTML = "";
+    items.forEach((text) => {
+      const li = document.createElement("li");
+      li.textContent = text;
+      listEl.appendChild(li);
+    });
+  }
+
+  async function getJSON(path) {
+    const res = await fetch(API + path, { headers: headers() });
+    if (!res.ok) throw new Error(path + " " + res.status);
+    return res.json();
+  }
+
+  async function refreshHeartbeat() {
+    try {
+      const hb = await getJSON("/api/heartbeat");
+      $("dot").className = "dot" + (hb.online ? " online" : "");
+      $("status-text").textContent = hb.online ? "System online" : "System offline";
+      $("last-seen").textContent = hb.last_seen ? "Last seen " + new Date(hb.last_seen).toLocaleTimeString() : "";
+    } catch (e) {
+      $("dot").className = "dot";
+      $("status-text").textContent = "System offline";
+      $("last-seen").textContent = "";
+    }
+  }
+
+  async function refreshCapabilities() {
+    try {
+      const c = await getJSON("/api/capabilities");
+      $("cap-target").textContent = c.target || "—";
+      $("cap-ports").textContent = c.scan_ports || "—";
+      $("cap-interval").textContent = "every " + c.scan_interval_hours + "h";
+      $("cap-mode").textContent = c.read_only ? "Read-only" : "Read-write";
+      fill($("cap-allowed"), c.allowed_actions || []);
+      fill($("cap-forbidden"), c.forbidden_actions || []);
+    } catch (e) {}
+  }
+
+  async function refreshStatus() {
+    try {
+      const s = await getJSON("/api/status");
+      if (!s.scanned) return;
+      $("meta-time").textContent = new Date(s.timestamp).toLocaleString();
+      $("meta-count").textContent = s.ports.length;
+      const body = $("ports-body");
+      body.innerHTML = "";
+      $("ports-empty").style.display = s.ports.length ? "none" : "block";
+      s.ports.forEach((p) => {
+        const tr = document.createElement("tr");
+        [p.port + "/" + p.protocol, p.service || "unknown", p.state].forEach((text, i) => {
+          const td = document.createElement("td");
+          td.textContent = text;
+          if (i > 0) td.className = "dim";
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+    } catch (e) {}
+  }
+
+  async function refreshNotes() {
+    try {
+      const data = await getJSON("/api/alerts");
+      const list = $("notes-list");
+      list.innerHTML = "";
+      const notes = [];
+      (data.alerts || []).forEach((a) => (a.notes || []).forEach((n) => notes.push({ ...n, timestamp: a.timestamp })));
+      $("notes-empty").style.display = notes.length ? "none" : "block";
+      notes.slice(0, 20).forEach((n) => {
+        const sev = (n.severity || "medium").toLowerCase();
+        const div = document.createElement("div");
+        div.className = "note";
+
+        const head = document.createElement("div");
+        head.className = "note-head";
+        const tag = document.createElement("span");
+        tag.className = "tag " + sev;
+        tag.textContent = sev.toUpperCase();
+        const port = document.createElement("span");
+        port.className = "note-port";
+        port.textContent = "port " + n.port;
+        const time = document.createElement("span");
+        time.className = "note-time";
+        time.textContent = new Date(n.timestamp).toLocaleString();
+        head.append(tag, port, time);
+
+        const text = document.createElement("div");
+        text.className = "note-text";
+        text.textContent = n.note || "";
+        const action = document.createElement("div");
+        action.className = "note-action";
+        action.textContent = n.recommended_action || "";
+
+        div.append(head, text, action);
+        list.appendChild(div);
+      });
+    } catch (e) {}
+  }
+
+  function addMessage(who, text) {
+    const empty = $("chat-empty");
+    if (empty) empty.remove();
+    const log = $("chat-log");
+    const div = document.createElement("div");
+    div.className = "msg " + who;
+    const label = document.createElement("div");
+    label.className = "who";
+    label.textContent = who === "user" ? "you" : "alfred";
+    const body = document.createElement("div");
+    body.textContent = text;
+    div.append(label, body);
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  $("chat-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = $("chat-input");
+    const button = $("chat-button");
+    const question = input.value.trim();
+    if (!question) return;
+
+    addMessage("user", question);
+    input.value = "";
+    button.disabled = true;
+
+    try {
+      const res = await fetch(API + "/api/ask", {
+        method: "POST",
+        headers: headers({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ question }),
+      });
+      const data = await res.json();
+      addMessage("alfred", data.answer || data.detail || "No response.");
+    } catch (err) {
+      addMessage("alfred", "Couldn't reach Alfred. Check that the start script is running.");
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  function refreshAll() {
+    refreshHeartbeat();
+    refreshStatus();
+    refreshNotes();
+  }
+
+  refreshCapabilities();
+  refreshAll();
+  setInterval(refreshAll, 15000);
+</script>
+</body>
+</html>

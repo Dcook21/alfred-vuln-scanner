@@ -1,0 +1,7 @@
+anthropic
+apscheduler
+python-nmap
+requests
+fastapi
+uvicorn
+pydantic
